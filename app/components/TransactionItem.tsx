@@ -14,10 +14,19 @@ interface TransactionItemProps {
 const TransactionItem: React.FC<TransactionItemProps> = ({ transaction, onEdit }) => {
   const { deleteTransaction } = useTransactions();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
-  const handleDelete = () => {
-    deleteTransaction(transaction.id);
-    setShowDeleteConfirm(false);
+  const handleDelete = async () => {
+    setIsDeleting(true);
+    try {
+      await deleteTransaction(transaction.id);
+      setShowDeleteConfirm(false);
+    } catch (error) {
+      console.error('Error deleting transaction:', error);
+      alert('Failed to delete transaction. Please try again.');
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   return (
@@ -90,15 +99,17 @@ const TransactionItem: React.FC<TransactionItemProps> = ({ transaction, onEdit }
             <div className="flex gap-4">
               <button
                 onClick={() => setShowDeleteConfirm(false)}
-                className="flex-1 py-2 px-4 border border-gray-300 rounded-lg font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                disabled={isDeleting}
+                className="flex-1 py-2 px-4 border border-gray-300 rounded-lg font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Cancel
               </button>
               <button
                 onClick={handleDelete}
-                className="flex-1 py-2 px-4 bg-red-500 text-white rounded-lg font-medium hover:bg-red-600 transition-colors"
+                disabled={isDeleting}
+                className="flex-1 py-2 px-4 bg-red-500 text-white rounded-lg font-medium hover:bg-red-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                Delete
+                {isDeleting ? 'Deleting...' : 'Delete'}
               </button>
             </div>
           </div>

@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma"
 // DELETE a budget
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions)
@@ -18,9 +18,11 @@ export async function DELETE(
       )
     }
 
+    const { id } = await params
+
     // Verify the budget belongs to the user
     const existingBudget = await prisma.budget.findUnique({
-      where: { id: params.id }
+      where: { id }
     })
 
     if (!existingBudget) {
@@ -38,7 +40,7 @@ export async function DELETE(
     }
 
     await prisma.budget.delete({
-      where: { id: params.id }
+      where: { id }
     })
 
     return NextResponse.json({ success: true })

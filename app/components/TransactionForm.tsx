@@ -37,10 +37,11 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onClose, editTransact
   const [category, setCategory] = useState<Category>(editTransaction?.category || 'Food');
   const [description, setDescription] = useState(editTransaction?.description || '');
   const [date, setDate] = useState(editTransaction?.date || new Date().toISOString().split('T')[0]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const categories = type === 'income' ? incomeCategories : expenseCategories;
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!amount || parseFloat(amount) <= 0) {
@@ -48,26 +49,37 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onClose, editTransact
       return;
     }
 
-    const transactionData = {
-      type,
-      amount: parseFloat(amount),
-      category,
-      description: description || `${type === 'income' ? 'Income' : 'Expense'} - ${category}`,
-      date,
-    };
+    if (isSubmitting) return;
 
-    if (editTransaction) {
-      updateTransaction(editTransaction.id, transactionData);
-    } else {
-      addTransaction(transactionData);
+    setIsSubmitting(true);
+
+    try {
+      const transactionData = {
+        type,
+        amount: parseFloat(amount),
+        category,
+        description: description || `${type === 'income' ? 'Income' : 'Expense'} - ${category}`,
+        date,
+      };
+
+      if (editTransaction) {
+        await updateTransaction(editTransaction.id, transactionData);
+      } else {
+        await addTransaction(transactionData);
+      }
+
+      onClose();
+    } catch (error) {
+      console.error('Error saving transaction:', error);
+      alert('Failed to save transaction. Please try again.');
+    } finally {
+      setIsSubmitting(false);
     }
-
-    onClose();
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 overflow-y-auto">
+      <div className="bg-white rounded-lg shadow-xl w-full max-w-md my-8">
         <div className="flex justify-between items-center p-6 border-b">
           <h2 className="text-2xl font-bold text-gray-800">
             {editTransaction ? 'Edit Transaction' : 'Add Transaction'}
@@ -185,15 +197,17 @@ const TransactionForm: React.FC<TransactionFormProps> = ({ onClose, editTransact
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-2 px-4 border border-gray-300 rounded-lg font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+              disabled={isSubmitting}
+              className="flex-1 py-2 px-4 border border-gray-300 rounded-lg font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Cancel
             </button>
             <button
               type="submit"
-              className="flex-1 py-2 px-4 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600 transition-colors"
+              disabled={isSubmitting}
+              className="flex-1 py-2 px-4 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {editTransaction ? 'Update' : 'Add'}
+              {isSubmitting ? 'Saving...' : (editTransaction ? 'Update' : 'Add')}
             </button>
           </div>
         </form>

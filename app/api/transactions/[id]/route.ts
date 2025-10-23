@@ -6,7 +6,7 @@ import { prisma } from "@/lib/prisma"
 // PUT update a transaction
 export async function PUT(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions)
@@ -18,12 +18,13 @@ export async function PUT(
       )
     }
 
+    const { id } = await params
     const body = await request.json()
     const { type, amount, category, description, date } = body
 
     // Verify the transaction belongs to the user
     const existingTransaction = await prisma.transaction.findUnique({
-      where: { id: params.id }
+      where: { id }
     })
 
     if (!existingTransaction) {
@@ -41,7 +42,7 @@ export async function PUT(
     }
 
     const transaction = await prisma.transaction.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         type,
         amount: parseFloat(amount),
@@ -64,7 +65,7 @@ export async function PUT(
 // DELETE a transaction
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const session = await getServerSession(authOptions)
@@ -76,9 +77,11 @@ export async function DELETE(
       )
     }
 
+    const { id } = await params
+
     // Verify the transaction belongs to the user
     const existingTransaction = await prisma.transaction.findUnique({
-      where: { id: params.id }
+      where: { id }
     })
 
     if (!existingTransaction) {
@@ -96,7 +99,7 @@ export async function DELETE(
     }
 
     await prisma.transaction.delete({
-      where: { id: params.id }
+      where: { id }
     })
 
     return NextResponse.json({ success: true })

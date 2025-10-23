@@ -43,7 +43,11 @@ const Charts: React.FC = () => {
 
     return days.map((day) => {
       const dayStr = format(day, 'yyyy-MM-dd');
-      const dayTransactions = transactions.filter((t) => t.date === dayStr);
+      const dayTransactions = transactions.filter((t) => {
+        // Parse the transaction date (which might be ISO string or date string)
+        const transactionDate = format(new Date(t.date), 'yyyy-MM-dd');
+        return transactionDate === dayStr;
+      });
 
       const income = dayTransactions
         .filter((t) => t.type === 'income')

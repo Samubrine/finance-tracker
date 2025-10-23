@@ -18,8 +18,11 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  transactions Transaction[]
-  budgets      Budget[]
+  transactions          Transaction[]
+  budgets               Budget[]
+  recurringTransactions RecurringTransaction[]
+  savingsGoals          SavingsGoal[]
+  alerts                Alert[]
 }
 
 model Transaction {
@@ -51,4 +54,60 @@ model Budget {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+model RecurringTransaction {
+  id          String   @id @default(cuid())
+  type        String   // "income" or "expense"
+  amount      Float
+  category    String
+  description String
+  frequency   String   // "daily", "weekly", "monthly", "yearly"
+  startDate   DateTime
+  endDate     DateTime?
+  lastRun     DateTime?
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isActive])
+}
+
+model SavingsGoal {
+  id            String   @id @default(cuid())
+  name          String
+  targetAmount  Float
+  currentAmount Float    @default(0)
+  deadline      DateTime?
+  category      String?
+  description   String?
+  isCompleted   Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Alert {
+  id        String   @id @default(cuid())
+  type      String   // "budget_warning", "goal_milestone", "unusual_spending", "recurring_reminder"
+  title     String
+  message   String
+  severity  String   // "info", "warning", "error"
+  isRead    Boolean  @default(false)
+  metadata  String?  // JSON string for additional data
+  createdAt DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([isRead])
 }

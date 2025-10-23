@@ -90,6 +90,17 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({ childr
   }, [status]);
 
   const addTransaction = async (transaction: Omit<Transaction, 'id' | 'createdAt'>) => {
+    // Create optimistic transaction
+    const optimisticId = `temp-${Date.now()}`;
+    const optimisticTransaction: Transaction = {
+      id: optimisticId,
+      ...transaction,
+      createdAt: new Date().toISOString(),
+    };
+    
+    // Optimistic update - add to UI immediately
+    setTransactions((prev) => [optimisticTransaction, ...prev]);
+
     try {
       const response = await fetch('/api/transactions', {
         method: 'POST',
@@ -99,17 +110,36 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({ childr
 
       if (response.ok) {
         const newTransaction = await response.json();
-        setTransactions((prev) => [newTransaction, ...prev]);
+        // Replace optimistic transaction with real one
+        setTransactions((prev) =>
+          prev.map((t) => (t.id === optimisticId ? newTransaction : t))
+        );
       } else {
+        // Remove optimistic transaction on error
+        setTransactions((prev) => prev.filter((t) => t.id !== optimisticId));
         throw new Error('Failed to add transaction');
       }
     } catch (error) {
+      // Remove optimistic transaction on error
+      setTransactions((prev) => prev.filter((t) => t.id !== optimisticId));
       console.error('Error adding transaction:', error);
       throw error;
     }
   };
 
   const updateTransaction = async (id: string, transaction: Omit<Transaction, 'id' | 'createdAt'>) => {
+    // Optimistic update - update UI immediately
+    const previousTransactions = [...transactions];
+    const optimisticTransaction: Transaction = {
+      id,
+      ...transaction,
+      createdAt: transactions.find(t => t.id === id)?.createdAt || new Date().toISOString(),
+    };
+    
+    setTransactions((prev) =>
+      prev.map((t) => (t.id === id ? optimisticTransaction : t))
+    );
+
     try {
       const response = await fetch(`/api/transactions/${id}`, {
         method: 'PUT',
@@ -119,36 +149,59 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({ childr
 
       if (response.ok) {
         const updatedTransaction = await response.json();
+        // Update with the actual server response
         setTransactions((prev) =>
           prev.map((t) => (t.id === id ? updatedTransaction : t))
         );
       } else {
+        // Revert optimistic update on error
+        setTransactions(previousTransactions);
         throw new Error('Failed to update transaction');
       }
     } catch (error) {
+      // Revert optimistic update on error
+      setTransactions(previousTransactions);
       console.error('Error updating transaction:', error);
       throw error;
     }
   };
 
   const deleteTransaction = async (id: string) => {
+    // Store previous state for rollback
+    const previousTransactions = [...transactions];
+    
+    // Optimistic update - remove from UI immediately
+    setTransactions((prev) => prev.filter((t) => t.id !== id));
+
     try {
       const response = await fetch(`/api/transactions/${id}`, {
         method: 'DELETE',
       });
 
-      if (response.ok) {
-        setTransactions((prev) => prev.filter((t) => t.id !== id));
-      } else {
+      if (!response.ok) {
+        // Revert on error
+        setTransactions(previousTransactions);
         throw new Error('Failed to delete transaction');
       }
     } catch (error) {
+      // Revert on error
+      setTransactions(previousTransactions);
       console.error('Error deleting transaction:', error);
       throw error;
     }
   };
 
   const addBudget = async (budget: Budget) => {
+    // Create optimistic budget
+    const optimisticId = `temp-${Date.now()}`;
+    const optimisticBudget: Budget = {
+      ...budget,
+      id: optimisticId,
+    };
+    
+    // Optimistic update - add to UI immediately, replacing any existing budget for this category
+    setBudgets((prev) => [...prev.filter((b) => b.category !== budget.category), optimisticBudget]);
+
     try {
       const response = await fetch('/api/budgets', {
         method: 'POST',
@@ -158,11 +211,18 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({ childr
 
       if (response.ok) {
         const newBudget = await response.json();
-        setBudgets((prev) => [...prev.filter((b) => b.category !== budget.category), newBudget]);
+        // Replace optimistic budget with real one
+        setBudgets((prev) =>
+          prev.map((b) => (b.id === optimisticId ? newBudget : b))
+        );
       } else {
+        // Remove optimistic budget on error
+        setBudgets((prev) => prev.filter((b) => b.id !== optimisticId));
         throw new Error('Failed to add budget');
       }
     } catch (error) {
+      // Remove optimistic budget on error
+      setBudgets((prev) => prev.filter((b) => b.id !== optimisticId));
       console.error('Error adding budget:', error);
       throw error;
     }
@@ -178,17 +238,25 @@ export const TransactionProvider: React.FC<TransactionProviderProps> = ({ childr
   };
 
   const deleteBudget = async (id: string) => {
+    // Store previous state for rollback
+    const previousBudgets = [...budgets];
+    
+    // Optimistic update - remove from UI immediately
+    setBudgets((prev) => prev.filter((b) => b.id !== id));
+
     try {
       const response = await fetch(`/api/budgets/${id}`, {
         method: 'DELETE',
       });
 
-      if (response.ok) {
-        setBudgets((prev) => prev.filter((b) => b.id !== id));
-      } else {
+      if (!response.ok) {
+        // Revert on error
+        setBudgets(previousBudgets);
         throw new Error('Failed to delete budget');
       }
     } catch (error) {
+      // Revert on error
+      setBudgets(previousBudgets);
       console.error('Error deleting budget:', error);
       throw error;
     }

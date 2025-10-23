@@ -23,8 +23,9 @@ const BudgetTracker: React.FC = () => {
   const [category, setCategory] = useState<Category>('Food');
   const [limit, setLimit] = useState('');
   const [period, setPeriod] = useState<'monthly' | 'weekly'>('monthly');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!limit || parseFloat(limit) <= 0) {
@@ -32,14 +33,25 @@ const BudgetTracker: React.FC = () => {
       return;
     }
 
-    addBudget({
-      category,
-      limit: parseFloat(limit),
-      period,
-    });
+    if (isSubmitting) return;
 
-    setLimit('');
-    setShowForm(false);
+    setIsSubmitting(true);
+
+    try {
+      await addBudget({
+        category,
+        limit: parseFloat(limit),
+        period,
+      });
+
+      setLimit('');
+      setShowForm(false);
+    } catch (error) {
+      console.error('Error adding budget:', error);
+      alert('Failed to add budget. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const calculateSpending = (budget: Budget) => {
@@ -112,7 +124,16 @@ const BudgetTracker: React.FC = () => {
                       </p>
                     </div>
                     <button
-                      onClick={() => budget.id && deleteBudget(budget.id)}
+                      onClick={async () => {
+                        if (budget.id && window.confirm('Are you sure you want to delete this budget?')) {
+                          try {
+                            await deleteBudget(budget.id);
+                          } catch (error) {
+                            console.error('Error deleting budget:', error);
+                            alert('Failed to delete budget. Please try again.');
+                          }
+                        }
+                      }}
                       className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
                       title="Delete budget"
                     >
@@ -223,15 +244,17 @@ const BudgetTracker: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setShowForm(false)}
-                  className="flex-1 py-2 px-4 border border-gray-300 rounded-lg font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                  disabled={isSubmitting}
+                  className="flex-1 py-2 px-4 border border-gray-300 rounded-lg font-medium text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="flex-1 py-2 px-4 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600 transition-colors"
+                  disabled={isSubmitting}
+                  className="flex-1 py-2 px-4 bg-blue-500 text-white rounded-lg font-medium hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  Add Budget
+                  {isSubmitting ? 'Adding...' : 'Add Budget'}
                 </button>
               </div>
             </form>
