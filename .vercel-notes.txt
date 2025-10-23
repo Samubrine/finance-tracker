@@ -1,0 +1,16 @@
+# Vercel Configuration for Prisma Deployment
+# This file ensures Prisma engine files are properly bundled
+
+# Build Settings:
+# In your Vercel project settings, ensure:
+# - Build Command: npm run build
+# - Output Directory: .next (default)
+# - Install Command: npm install (default)
+
+# The next.config.ts webpack configuration with PrismaPlugin
+# will ensure Prisma engine files are included in the deployment
+
+# If you encounter Prisma engine errors, make sure:
+# 1. This project is building with webpack (not Turbopack)
+# 2. The @prisma/nextjs-monorepo-workaround-plugin is installed
+# 3. DATABASE_URL is set in Vercel environment variables
