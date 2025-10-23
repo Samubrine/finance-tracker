@@ -4,6 +4,9 @@ import { PrismaPlugin } from '@prisma/nextjs-monorepo-workaround-plugin'
 const nextConfig: NextConfig = {
   /* config options here */
   
+  // Silence the Turbopack warning - we intentionally use webpack for Prisma
+  turbopack: {},
+  
   // Use webpack instead of Turbopack for production builds
   // This is necessary because Turbopack doesn't properly bundle Prisma engine files
   // The PrismaPlugin ensures all necessary engine binaries are included in Vercel deployment
