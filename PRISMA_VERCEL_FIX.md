@@ -16,10 +16,26 @@ for runtime "rhel-openssl-3.0.x".
 
 Even though this is not a monorepo, we need the `@prisma/nextjs-monorepo-workaround-plugin` to ensure Prisma engine files are bundled correctly.
 
+### Configuration in `prisma/schema.prisma` (CRITICAL!)
+
+**Add the Vercel binary target:**
+
+```prisma
+generator client {
+  provider      = "prisma-client-js"
+  output        = "./generated/client"
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+}
+```
+
+This ensures Prisma generates the engine binary for Vercel's RHEL runtime (`rhel-openssl-3.0.x`) alongside your native development binary.
+
 ### Configuration in `next.config.ts`
 
 ```typescript
 import { PrismaPlugin } from '@prisma/nextjs-monorepo-workaround-plugin'
+
+turbopack: {},  // Silence the Turbopack warning
 
 webpack: (config, { isServer }) => {
   if (isServer) {
@@ -33,13 +49,29 @@ This forces Next.js to use webpack (instead of Turbopack) for server-side bundli
 
 ## What You'll See During Build
 
+### Step 1: Regenerate Prisma Client (REQUIRED)
+
+After adding `binaryTargets`, you MUST regenerate the Prisma Client:
+
+```bash
+npx prisma generate
+```
+
+This will download and generate both engine binaries:
+- ✓ Query engine for Windows/native
+- ✓ Query engine for rhel-openssl-3.0.x (Vercel)
+
+### Step 2: Build Your App
+
+```bash
+npm run build
+```
+
 ### ⚠️ Expected Warning (This is OK!)
 
-```
-ERROR: This build is using Turbopack, with a `webpack` config and no `turbopack` config.
-```
+The Turbopack warning should now be silenced by the `turbopack: {}` config. The build should succeed without errors.
 
-**Don't panic!** This warning is expected and necessary. It just means:
+**If you still see a warning**, it just means:
 - Next.js detected your webpack configuration
 - It's using webpack (not Turbopack) for the build
 - The PrismaPlugin is working correctly
@@ -89,25 +121,50 @@ Just push to GitHub, and Vercel will:
 
 ## Files Modified
 
-✅ `next.config.ts` - Added webpack config with PrismaPlugin
+✅ `prisma/schema.prisma` - Added `binaryTargets = ["native", "rhel-openssl-3.0.x"]`
+✅ `next.config.ts` - Added webpack config with PrismaPlugin and `turbopack: {}`
 ✅ `types/prisma-plugin.d.ts` - TypeScript definitions for the plugin
 ✅ `VERCEL_DEPLOYMENT.md` - Complete deployment documentation
 
 ## Testing
 
-Build locally to verify:
+### 1. Regenerate Prisma Client with new binary targets:
+```bash
+npx prisma generate
+```
+
+You should see output like:
+```
+✔ Generated Prisma Client to .\prisma\generated\client
+  Prisma Client will use 2 engine binaries:
+  - native (your OS)
+  - rhel-openssl-3.0.x (Vercel)
+```
+
+### 2. Build locally to verify:
 ```bash
 npm run build
 ```
 
-You should see the Turbopack warning, but the build should complete successfully.
+The build should complete successfully with no errors.
 
 ## Summary
 
 - **Problem**: Turbopack doesn't bundle Prisma engines → Runtime error on Vercel
-- **Solution**: Use webpack + PrismaPlugin → All engines bundled correctly
-- **Trade-off**: Accept the Turbopack warning → Builds work on Vercel
+- **Solution 1**: Add `binaryTargets = ["native", "rhel-openssl-3.0.x"]` to generate Vercel engine
+- **Solution 2**: Use webpack + PrismaPlugin → Ensure all engines are bundled correctly
+- **Solution 3**: Add `turbopack: {}` → Silence the build warning
 - **Result**: Successful deployment with working Prisma database connection ✨
+
+## Quick Checklist
+
+- [ ] Added `binaryTargets` to `prisma/schema.prisma`
+- [ ] Run `npx prisma generate` to download RHEL engine
+- [ ] Added webpack config with PrismaPlugin to `next.config.ts`
+- [ ] Added `turbopack: {}` to `next.config.ts`
+- [ ] Test build locally: `npm run build`
+- [ ] Set environment variables in Vercel (DATABASE_URL, etc.)
+- [ ] Deploy to Vercel
 
 ---
 

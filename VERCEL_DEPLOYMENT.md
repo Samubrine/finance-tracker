@@ -11,7 +11,21 @@ This project uses Prisma ORM with Next.js 16 and requires special configuration 
 
 ## Configuration Applied
 
-### 1. Webpack Configuration with PrismaPlugin
+### 1. Prisma Schema - Binary Targets (CRITICAL!)
+
+In `prisma/schema.prisma`, add the Vercel binary target:
+
+```prisma
+generator client {
+  provider      = "prisma-client-js"
+  output        = "./generated/client"
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
+}
+```
+
+**Why this is needed**: Prisma must generate the engine binary for Vercel's RHEL runtime. Without this, the engine file won't exist in the deployment, causing the "Query Engine not found" error.
+
+### 2. Webpack Configuration with PrismaPlugin
 
 In `next.config.ts`, we use webpack instead of Turbopack for server-side bundling:
 
