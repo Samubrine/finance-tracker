@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
-import { prisma } from "@/lib/prisma"
+import { supabase } from "@/lib/prisma"
 
 // GET all budgets for the authenticated user
 export async function GET() {
@@ -15,14 +15,13 @@ export async function GET() {
       )
     }
 
-    const budgets = await prisma.budget.findMany({
-      where: {
-        userId: session.user.id
-      },
-      orderBy: {
-        createdAt: 'desc'
-      }
-    })
+    const { data: budgets, error } = await supabase
+      .from('budgets')
+      .select('*')
+      .eq('user_id', session.user.id)
+      .order('created_at', { ascending: false })
+
+    if (error) throw error
 
     return NextResponse.json(budgets)
   } catch (error) {
@@ -56,14 +55,18 @@ export async function POST(request: Request) {
       )
     }
 
-    const budget = await prisma.budget.create({
-      data: {
+    const { data: budget, error } = await supabase
+      .from('budgets')
+      .insert({
         category,
         limit: parseFloat(limit),
         period,
-        userId: session.user.id
-      }
-    })
+        user_id: session.user.id
+      })
+      .select()
+      .single()
+
+    if (error) throw error
 
     return NextResponse.json(budget, { status: 201 })
   } catch (error) {

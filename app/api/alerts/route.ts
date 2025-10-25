@@ -1,191 +1,108 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
+import { supabase } from '@/lib/prisma';
 
 // GET - Fetch all alerts
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-    });
+    const { data: alerts, error } = await supabase
+      .from('alerts')
+      .select('*')
+      .eq('user_id', session.user.id)
+      .order('created_at', { ascending: false });
 
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
-
-    const { searchParams } = new URL(request.url);
-    const unreadOnly = searchParams.get('unreadOnly') === 'true';
-
-    const alerts = await prisma.alert.findMany({
-      where: {
-        userId: user.id,
-        ...(unreadOnly ? { isRead: false } : {}),
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 50, // Limit to recent 50 alerts
-    });
+    if (error) throw error;
 
     return NextResponse.json(alerts);
   } catch (error) {
-    console.error('Error fetching alerts:', error);
+    console.error('Get alerts error:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch alerts' },
+      { error: 'Something went wrong' },
       { status: 500 }
     );
   }
 }
 
-// POST - Create a new alert (usually called by system)
+// POST - Create a new alert
 export async function POST(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
 
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-    });
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
     }
 
     const body = await request.json();
     const { type, title, message, severity, metadata } = body;
 
-    if (!type || !title || !message || !severity) {
-      return NextResponse.json(
-        { error: 'Missing required fields' },
-        { status: 400 }
-      );
-    }
-
-    const alert = await prisma.alert.create({
-      data: {
+    const { data: alert, error } = await supabase
+      .from('alerts')
+      .insert({
         type,
         title,
         message,
         severity,
-        metadata: metadata || null,
-        userId: user.id,
-      },
-    });
+        metadata,
+        user_id: session.user.id,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
 
     return NextResponse.json(alert, { status: 201 });
   } catch (error) {
-    console.error('Error creating alert:', error);
+    console.error('Create alert error:', error);
     return NextResponse.json(
-      { error: 'Failed to create alert' },
+      { error: 'Something went wrong' },
       { status: 500 }
     );
   }
 }
 
-// PATCH - Mark alerts as read
+// PATCH - Mark alert as read
 export async function PATCH(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
-    
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
 
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-    });
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
+    if (!session?.user?.id) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      );
     }
 
     const body = await request.json();
-    const { alertIds, markAllAsRead } = body;
+    const { id } = body;
 
-    if (markAllAsRead) {
-      // Mark all alerts as read
-      await prisma.alert.updateMany({
-        where: { userId: user.id, isRead: false },
-        data: { isRead: true },
-      });
-      return NextResponse.json({ message: 'All alerts marked as read' });
-    } else if (alertIds && Array.isArray(alertIds)) {
-      // Mark specific alerts as read
-      await prisma.alert.updateMany({
-        where: {
-          id: { in: alertIds },
-          userId: user.id,
-        },
-        data: { isRead: true },
-      });
-      return NextResponse.json({ message: 'Alerts marked as read' });
-    } else {
-      return NextResponse.json(
-        { error: 'Invalid request' },
-        { status: 400 }
-      );
-    }
+    const { data: alert, error } = await supabase
+      .from('alerts')
+      .update({ is_read: true })
+      .eq('id', id)
+      .eq('user_id', session.user.id)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    return NextResponse.json(alert);
   } catch (error) {
-    console.error('Error updating alerts:', error);
+    console.error('Update alert error:', error);
     return NextResponse.json(
-      { error: 'Failed to update alerts' },
-      { status: 500 }
-    );
-  }
-}
-
-// DELETE - Delete alerts
-export async function DELETE(request: NextRequest) {
-  try {
-    const session = await getServerSession(authOptions);
-    
-    if (!session?.user?.email) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-    });
-
-    if (!user) {
-      return NextResponse.json({ error: 'User not found' }, { status: 404 });
-    }
-
-    const { searchParams } = new URL(request.url);
-    const alertId = searchParams.get('id');
-    const deleteAll = searchParams.get('deleteAll') === 'true';
-
-    if (deleteAll) {
-      await prisma.alert.deleteMany({
-        where: { userId: user.id },
-      });
-      return NextResponse.json({ message: 'All alerts deleted' });
-    } else if (alertId) {
-      await prisma.alert.deleteMany({
-        where: {
-          id: alertId,
-          userId: user.id,
-        },
-      });
-      return NextResponse.json({ message: 'Alert deleted' });
-    } else {
-      return NextResponse.json(
-        { error: 'Invalid request' },
-        { status: 400 }
-      );
-    }
-  } catch (error) {
-    console.error('Error deleting alerts:', error);
-    return NextResponse.json(
-      { error: 'Failed to delete alerts' },
+      { error: 'Something went wrong' },
       { status: 500 }
     );
   }

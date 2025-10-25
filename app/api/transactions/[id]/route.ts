@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server"
 import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
-import { prisma } from "@/lib/prisma"
+import { supabase } from "@/lib/prisma"
 
 // PUT update a transaction
 export async function PUT(
@@ -23,34 +23,34 @@ export async function PUT(
     const { type, amount, category, description, date } = body
 
     // Verify the transaction belongs to the user
-    const existingTransaction = await prisma.transaction.findUnique({
-      where: { id }
-    })
+    const { data: existingTransaction, error: fetchError } = await supabase
+      .from('transactions')
+      .select('*')
+      .eq('id', id)
+      .eq('user_id', session.user.id)
+      .single()
 
-    if (!existingTransaction) {
+    if (fetchError || !existingTransaction) {
       return NextResponse.json(
         { error: "Transaction not found" },
         { status: 404 }
       )
     }
 
-    if (existingTransaction.userId !== session.user.id) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 403 }
-      )
-    }
-
-    const transaction = await prisma.transaction.update({
-      where: { id },
-      data: {
+    const { data: transaction, error: updateError } = await supabase
+      .from('transactions')
+      .update({
         type,
         amount: parseFloat(amount),
         category,
         description,
-        date: new Date(date),
-      }
-    })
+        date: new Date(date).toISOString(),
+      })
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (updateError) throw updateError
 
     return NextResponse.json(transaction)
   } catch (error) {
@@ -79,28 +79,14 @@ export async function DELETE(
 
     const { id } = await params
 
-    // Verify the transaction belongs to the user
-    const existingTransaction = await prisma.transaction.findUnique({
-      where: { id }
-    })
+    // Verify the transaction belongs to the user and delete it
+    const { error: deleteError } = await supabase
+      .from('transactions')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', session.user.id)
 
-    if (!existingTransaction) {
-      return NextResponse.json(
-        { error: "Transaction not found" },
-        { status: 404 }
-      )
-    }
-
-    if (existingTransaction.userId !== session.user.id) {
-      return NextResponse.json(
-        { error: "Unauthorized" },
-        { status: 403 }
-      )
-    }
-
-    await prisma.transaction.delete({
-      where: { id }
-    })
+    if (deleteError) throw deleteError
 
     return NextResponse.json({ success: true })
   } catch (error) {

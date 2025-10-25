@@ -3,8 +3,11 @@ import { getServerSession } from "next-auth"
 import { authOptions } from "@/lib/auth"
 import { supabase } from "@/lib/prisma"
 
-// GET all transactions for the authenticated user
-export async function GET() {
+// DELETE a budget
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     const session = await getServerSession(authOptions)
 
@@ -15,17 +18,19 @@ export async function GET() {
       )
     }
 
-    const { data: transactions, error } = await supabase
-      .from('transactions')
-      .select('*')
+    const { id } = await params
+
+    const { error } = await supabase
+      .from('budgets')
+      .delete()
+      .eq('id', id)
       .eq('user_id', session.user.id)
-      .order('date', { ascending: false })
 
     if (error) throw error
 
-    return NextResponse.json(transactions)
+    return NextResponse.json({ success: true })
   } catch (error) {
-    console.error("Get transactions error:", error)
+    console.error("Delete budget error:", error)
     return NextResponse.json(
       { error: "Something went wrong" },
       { status: 500 }
@@ -33,8 +38,11 @@ export async function GET() {
   }
 }
 
-// POST create a new transaction
-export async function POST(request: Request) {
+// PUT update a budget
+export async function PUT(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
   try {
     const session = await getServerSession(authOptions)
 
@@ -45,34 +53,27 @@ export async function POST(request: Request) {
       )
     }
 
+    const { id } = await params
     const body = await request.json()
-    const { type, amount, category, description, date } = body
+    const { category, limit, period } = body
 
-    if (!type || !amount || !category || !description || !date) {
-      return NextResponse.json(
-        { error: "All fields are required" },
-        { status: 400 }
-      )
-    }
-
-    const { data: transaction, error } = await supabase
-      .from('transactions')
-      .insert({
-        type,
-        amount: parseFloat(amount),
+    const { data: budget, error } = await supabase
+      .from('budgets')
+      .update({
         category,
-        description,
-        date: new Date(date).toISOString(),
-        user_id: session.user.id
+        limit: parseFloat(limit),
+        period,
       })
+      .eq('id', id)
+      .eq('user_id', session.user.id)
       .select()
       .single()
 
     if (error) throw error
 
-    return NextResponse.json(transaction, { status: 201 })
+    return NextResponse.json(budget)
   } catch (error) {
-    console.error("Create transaction error:", error)
+    console.error("Update budget error:", error)
     return NextResponse.json(
       { error: "Something went wrong" },
       { status: 500 }
