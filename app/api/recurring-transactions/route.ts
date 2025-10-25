@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { supabase } from '@/lib/prisma';
+import { supabase } from '@/lib/supabase';
 
 // GET - Fetch all recurring transactions
 export async function GET() {
@@ -12,20 +12,27 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-    });
+    const { data: user } = await supabase
+      .from('users')
+      .select('*')
+      .eq('email', session.user.email)
+      .single();
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    const recurringTransactions = await prisma.recurringTransaction.findMany({
-      where: { userId: user.id },
-      orderBy: { createdAt: 'desc' },
-    });
+    const { data: recurringTransactions, error } = await supabase
+      .from('recurring_transactions')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false });
 
-    return NextResponse.json(recurringTransactions);
+    if (error) {
+      throw error;
+    }
+
+    return NextResponse.json(recurringTransactions || []);
   } catch (error) {
     console.error('Error fetching recurring transactions:', error);
     return NextResponse.json(
@@ -44,9 +51,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-    });
+    const { data: user } = await supabase
+      .from('users')
+      .select('*')
+      .eq('email', session.user.email)
+      .single();
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
@@ -62,19 +71,25 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const recurringTransaction = await prisma.recurringTransaction.create({
-      data: {
+    const { data: recurringTransaction, error } = await supabase
+      .from('recurring_transactions')
+      .insert({
         type,
         amount: parseFloat(amount),
         category,
         description: description || '',
         frequency,
-        startDate: new Date(startDate),
-        endDate: endDate ? new Date(endDate) : null,
-        isActive: isActive !== undefined ? isActive : true,
-        userId: user.id,
-      },
-    });
+        start_date: new Date(startDate).toISOString(),
+        end_date: endDate ? new Date(endDate).toISOString() : null,
+        is_active: isActive !== undefined ? isActive : true,
+        user_id: user.id,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      throw error;
+    }
 
     return NextResponse.json(recurringTransaction, { status: 201 });
   } catch (error) {

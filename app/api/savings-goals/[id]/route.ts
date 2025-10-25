@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { prisma } from '@/lib/prisma';
+import { supabase } from '@/lib/supabase';
 
 // GET - Fetch a single savings goal
 export async function GET(
@@ -15,9 +15,11 @@ export async function GET(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-    });
+    const { data: user } = await supabase
+      .from('users')
+      .select('*')
+      .eq('email', session.user.email)
+      .single();
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
@@ -25,11 +27,14 @@ export async function GET(
 
     const { id } = await params;
 
-    const savingsGoal = await prisma.savingsGoal.findUnique({
-      where: { id, userId: user.id },
-    });
+    const { data: savingsGoal, error } = await supabase
+      .from('savings_goals')
+      .select('*')
+      .eq('id', id)
+      .eq('user_id', user.id)
+      .single();
 
-    if (!savingsGoal) {
+    if (error || !savingsGoal) {
       return NextResponse.json(
         { error: 'Savings goal not found' },
         { status: 404 }
@@ -58,9 +63,11 @@ export async function PUT(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-    });
+    const { data: user } = await supabase
+      .from('users')
+      .select('*')
+      .eq('email', session.user.email)
+      .single();
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
@@ -69,9 +76,12 @@ export async function PUT(
     const { id } = await params;
     const body = await request.json();
 
-    const existing = await prisma.savingsGoal.findUnique({
-      where: { id, userId: user.id },
-    });
+    const { data: existing } = await supabase
+      .from('savings_goals')
+      .select('*')
+      .eq('id', id)
+      .eq('user_id', user.id)
+      .single();
 
     if (!existing) {
       return NextResponse.json(
@@ -83,17 +93,23 @@ export async function PUT(
     const updatedData: any = {};
     
     if (body.name !== undefined) updatedData.name = body.name;
-    if (body.targetAmount !== undefined) updatedData.targetAmount = parseFloat(body.targetAmount);
-    if (body.currentAmount !== undefined) updatedData.currentAmount = parseFloat(body.currentAmount);
-    if (body.deadline !== undefined) updatedData.deadline = body.deadline ? new Date(body.deadline) : null;
+    if (body.targetAmount !== undefined) updatedData.target_amount = parseFloat(body.targetAmount);
+    if (body.currentAmount !== undefined) updatedData.current_amount = parseFloat(body.currentAmount);
+    if (body.deadline !== undefined) updatedData.deadline = body.deadline ? new Date(body.deadline).toISOString() : null;
     if (body.category !== undefined) updatedData.category = body.category;
     if (body.description !== undefined) updatedData.description = body.description;
-    if (body.isCompleted !== undefined) updatedData.isCompleted = body.isCompleted;
+    if (body.isCompleted !== undefined) updatedData.is_completed = body.isCompleted;
 
-    const savingsGoal = await prisma.savingsGoal.update({
-      where: { id },
-      data: updatedData,
-    });
+    const { data: savingsGoal, error } = await supabase
+      .from('savings_goals')
+      .update(updatedData)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) {
+      throw error;
+    }
 
     return NextResponse.json(savingsGoal);
   } catch (error) {
@@ -117,9 +133,11 @@ export async function DELETE(
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-    });
+    const { data: user } = await supabase
+      .from('users')
+      .select('*')
+      .eq('email', session.user.email)
+      .single();
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
@@ -127,9 +145,12 @@ export async function DELETE(
 
     const { id } = await params;
 
-    const existing = await prisma.savingsGoal.findUnique({
-      where: { id, userId: user.id },
-    });
+    const { data: existing } = await supabase
+      .from('savings_goals')
+      .select('*')
+      .eq('id', id)
+      .eq('user_id', user.id)
+      .single();
 
     if (!existing) {
       return NextResponse.json(
@@ -138,9 +159,14 @@ export async function DELETE(
       );
     }
 
-    await prisma.savingsGoal.delete({
-      where: { id },
-    });
+    const { error } = await supabase
+      .from('savings_goals')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      throw error;
+    }
 
     return NextResponse.json({ message: 'Savings goal deleted successfully' });
   } catch (error) {

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import { supabase } from '@/lib/prisma';
+import { supabase } from '@/lib/supabase';
 
 // GET - Fetch all savings goals
 export async function GET() {
@@ -12,20 +12,27 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-    });
+    const { data: user } = await supabase
+      .from('users')
+      .select('*')
+      .eq('email', session.user.email)
+      .single();
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
     }
 
-    const savingsGoals = await prisma.savingsGoal.findMany({
-      where: { userId: user.id },
-      orderBy: { createdAt: 'desc' },
-    });
+    const { data: savingsGoals, error } = await supabase
+      .from('savings_goals')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false });
 
-    return NextResponse.json(savingsGoals);
+    if (error) {
+      throw error;
+    }
+
+    return NextResponse.json(savingsGoals || []);
   } catch (error) {
     console.error('Error fetching savings goals:', error);
     return NextResponse.json(
@@ -44,9 +51,11 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email: session.user.email },
-    });
+    const { data: user } = await supabase
+      .from('users')
+      .select('*')
+      .eq('email', session.user.email)
+      .single();
 
     if (!user) {
       return NextResponse.json({ error: 'User not found' }, { status: 404 });
@@ -62,17 +71,23 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const savingsGoal = await prisma.savingsGoal.create({
-      data: {
+    const { data: savingsGoal, error } = await supabase
+      .from('savings_goals')
+      .insert({
         name,
-        targetAmount: parseFloat(targetAmount),
-        currentAmount: currentAmount ? parseFloat(currentAmount) : 0,
-        deadline: deadline ? new Date(deadline) : null,
+        target_amount: parseFloat(targetAmount),
+        current_amount: currentAmount ? parseFloat(currentAmount) : 0,
+        deadline: deadline ? new Date(deadline).toISOString() : null,
         category: category || null,
         description: description || null,
-        userId: user.id,
-      },
-    });
+        user_id: user.id,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      throw error;
+    }
 
     return NextResponse.json(savingsGoal, { status: 201 });
   } catch (error) {
